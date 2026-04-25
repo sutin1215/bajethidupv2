@@ -40,7 +40,11 @@ export default function InsightCard({ userId, transactions, limits, goals }: Pro
         }),
       });
       const data = await res.json();
-      setInsight(data.message ?? "Tap to chat with your AI financial advisor.");
+      if (!res.ok) {
+        setInsight("AI insights are resting — daily limit reached. Tap to chat when it resets! 😴");
+      } else {
+        setInsight(data.message ?? "Tap to chat with your AI financial advisor.");
+      }
     } catch {
       setInsight("Tap to chat with your AI financial advisor.");
     } finally {

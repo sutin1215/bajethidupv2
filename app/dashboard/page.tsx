@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Transaction, CategoryLimit, Goal } from "@/lib/types";
-import { DEMO_USER_ID } from "@/lib/constants";
+import { usePersona } from "@/hooks/usePersona";
 import AppShell from "@/components/layout/AppShell";
 import HealthRing from "@/components/home/HealthRing";
 import InsightCard from "@/components/home/InsightCard";
@@ -16,6 +16,7 @@ import { format } from "date-fns";
 const CATEGORIES = ["food", "transport", "shopping", "entertainment", "bills", "savings", "others"] as const;
 
 export default function DashboardPage() {
+  const { userId, isMartin, togglePersona, isReady } = usePersona();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [limits, setLimits] = useState<CategoryLimit[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -26,33 +27,36 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMounted(true);
+    if (!isReady) return;
+    
     loadData();
     const channel = supabase
       .channel("dashboard-realtime")
       .on("postgres_changes", {
         event: "*", schema: "public", table: "transactions",
-        filter: `user_id=eq.${DEMO_USER_ID}`,
+        filter: `user_id=eq.${userId}`,
       }, () => loadData())
       .on("postgres_changes", {
         event: "*", schema: "public", table: "category_limits",
-        filter: `user_id=eq.${DEMO_USER_ID}`,
+        filter: `user_id=eq.${userId}`,
       }, () => loadData())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [userId, isReady]);
 
   async function loadData() {
+    setLoading(true);
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
       .toISOString().split("T")[0];
 
     const [txRes, limRes, goalsRes, userRes] = await Promise.all([
       supabase.from("transactions").select("*")
-        .eq("user_id", DEMO_USER_ID).gte("date", startOfMonth).order("date", { ascending: false }),
-      supabase.from("category_limits").select("*").eq("user_id", DEMO_USER_ID),
-      supabase.from("goals").select("*").eq("user_id", DEMO_USER_ID),
-      supabase.from("users").select("income").eq("id", DEMO_USER_ID).single(),
+        .eq("user_id", userId).gte("date", startOfMonth).order("date", { ascending: false }),
+      supabase.from("category_limits").select("*").eq("user_id", userId),
+      supabase.from("goals").select("*").eq("user_id", userId),
+      supabase.from("users").select("income").eq("id", userId).single(),
     ]);
 
     setTransactions(txRes.data ?? []);
@@ -89,15 +93,18 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-500">
-              {mounted ? greeting() : "Welcome back"}, Amirah 👋
+              {mounted ? greeting() : "Welcome back"}, {isMartin ? "Martin" : "Amirah"} 👋
             </p>
             <h1 className="text-2xl font-bold text-gray-900">
               {mounted ? format(new Date(), "MMMM yyyy") : "Loading..."}
             </h1>
           </div>
-          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-            <span className="text-green-700 font-bold text-sm">A</span>
-          </div>
+          <button 
+            onClick={togglePersona}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors shadow-sm active:scale-95 ${isMartin ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}
+          >
+            <span className="font-bold text-sm">{isMartin ? "M" : "A"}</span>
+          </button>
         </div>
 
         {/* Health Ring */}
@@ -108,7 +115,7 @@ export default function DashboardPage() {
         />
 
         {/* AI Insight Card */}
-        <InsightCard userId={DEMO_USER_ID} transactions={transactions} limits={limits} goals={goals} />
+        <InsightCard userId={userId} transactions={transactions} limits={limits} goals={goals} />
 
         {/* Category Cards */}
         <div>
@@ -143,15 +150,15 @@ export default function DashboardPage() {
       {/* Floating Quick Add */}
       <button
         onClick={() => setShowQuickAdd(true)}
-        className="fixed bottom-24 right-5 w-14 h-14 bg-green-600 rounded-full shadow-lg flex items-center justify-center hover:bg-green-700 active:scale-95 transition-all z-10"
+        className={`fixed bottom-24 right-5 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white active:scale-95 transition-all z-10 ${isMartin ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
       >
-        <Plus className="w-7 h-7 text-white" />
+        <Plus className="w-7 h-7" />
       </button>
 
       <QuickAddSheet
         open={showQuickAdd}
         onClose={() => setShowQuickAdd(false)}
-        userId={DEMO_USER_ID}
+        userId={userId}
         onAdded={loadData}
       />
     </AppShell>

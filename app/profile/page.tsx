@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
-import { DEMO_USER_ID } from "@/lib/constants";
+import { usePersona } from "@/hooks/usePersona";
 import { useToast } from "@/hooks/use-toast";
 import {
   Globe, DollarSign, Receipt, Sliders, Bot,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 export default function ProfilePage() {
+  const { userId, isMartin, isReady } = usePersona();
   const [income, setIncome] = useState("");
   const [editingIncome, setEditingIncome] = useState(false);
   const [language, setLanguage] = useState("en");
@@ -21,18 +22,20 @@ export default function ProfilePage() {
   const [totalSpent, setTotalSpent] = useState(0);
   const { toast } = useToast();
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { 
+    if (isReady) loadData(); 
+  }, [userId, isReady]);
 
   async function loadData() {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
 
     const [userRes, billsRes, limitsRes, goalsRes, txRes] = await Promise.all([
-      supabase.from("users").select("*").eq("id", DEMO_USER_ID).single(),
-      supabase.from("recurring_bills").select("*").eq("user_id", DEMO_USER_ID).order("due_day"),
-      supabase.from("category_limits").select("*").eq("user_id", DEMO_USER_ID),
-      supabase.from("goals").select("*").eq("user_id", DEMO_USER_ID),
-      supabase.from("transactions").select("amount").eq("user_id", DEMO_USER_ID).gte("date", startOfMonth),
+      supabase.from("users").select("*").eq("id", userId).single(),
+      supabase.from("recurring_bills").select("*").eq("user_id", userId).order("due_day"),
+      supabase.from("category_limits").select("*").eq("user_id", userId),
+      supabase.from("goals").select("*").eq("user_id", userId),
+      supabase.from("transactions").select("amount").eq("user_id", userId).gte("date", startOfMonth),
     ]);
     setIncome(userRes.data?.income?.toString() ?? "");
     setLanguage(userRes.data?.language ?? "en");
@@ -46,14 +49,14 @@ export default function ProfilePage() {
   async function saveIncome() {
     const parsed = parseFloat(income);
     if (isNaN(parsed)) return;
-    await supabase.from("users").update({ income: parsed }).eq("id", DEMO_USER_ID);
+    await supabase.from("users").update({ income: parsed }).eq("id", userId);
     setEditingIncome(false);
     toast({ title: "Income updated ✓" });
   }
 
   async function saveLanguage(lang: string) {
     setLanguage(lang);
-    await supabase.from("users").update({ language: lang }).eq("id", DEMO_USER_ID);
+    await supabase.from("users").update({ language: lang }).eq("id", userId);
     toast({ title: `Language set to ${lang === "en" ? "English" : "Bahasa Malaysia"} ✓` });
   }
 
@@ -65,18 +68,18 @@ export default function ProfilePage() {
       <div className="pb-24 bg-gray-50 min-h-screen">
 
         {/* Hero header */}
-        <div className="bg-green-600 pt-12 pb-20 px-4 relative overflow-hidden">
+        <div className={`${isMartin ? "bg-blue-600" : "bg-green-600"} pt-12 pb-20 px-4 relative overflow-hidden transition-colors`}>
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-4 right-4 w-32 h-32 rounded-full bg-white" />
             <div className="absolute bottom-0 left-8 w-20 h-20 rounded-full bg-white" />
           </div>
           <div className="flex items-center gap-4 relative">
             <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-2xl font-bold text-white">A</span>
+              <span className="text-2xl font-bold text-white">{isMartin ? "M" : "A"}</span>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">Amirah</h1>
-              <p className="text-sm text-green-100">Demo Account · BajetHidup</p>
+              <h1 className="text-xl font-bold text-white">{isMartin ? "Martin Edwards" : "Amirah"}</h1>
+              <p className="text-sm text-white/80">Demo Account · BajetHidup</p>
             </div>
           </div>
         </div>
@@ -206,7 +209,7 @@ export default function ProfilePage() {
                 ))}
               </div>
             )}
-            <AddBillForm userId={DEMO_USER_ID} onAdded={loadData} />
+            <AddBillForm userId={userId} onAdded={loadData} />
           </Section>
 
           {/* Demo badge */}
@@ -214,7 +217,7 @@ export default function ProfilePage() {
             <Shield className="w-5 h-5 text-amber-600 flex-shrink-0" />
             <div>
               <p className="text-sm font-semibold text-amber-800">Demo Mode</p>
-              <p className="text-xs text-amber-600 mt-0.5">{"Using Amirah's sample data. All AI features are fully live."}</p>
+              <p className="text-xs text-amber-600 mt-0.5">{`Using ${isMartin ? "Martin's" : "Amirah's"} sample data. All AI features are fully live.`}</p>
             </div>
           </div>
 

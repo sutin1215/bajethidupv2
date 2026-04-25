@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       amount,
       category,
       date: today,
-      source: "quick_add",
+      merchant: description,
     });
 
     if (error) throw error;

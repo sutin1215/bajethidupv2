@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { DEMO_USER_ID } from "@/lib/constants";
+import { usePersona } from "@/hooks/usePersona";
 import AppShell from "@/components/layout/AppShell";
 import TodayVsYesterday from "@/components/insights/TodayVsYesterday";
 import WeeklyTrend from "@/components/insights/WeeklyTrend";
@@ -15,6 +15,7 @@ import BurnRate from "@/components/insights/BurnRate";
 import WeeklySummaryCard from "@/components/insights/WeeklySummaryCard";
 
 export default function InsightsPage() {
+  const { userId, isReady } = usePersona();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
   const [limits, setLimits] = useState<any[]>([]);
@@ -22,25 +23,28 @@ export default function InsightsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isReady) return;
+    
     loadData();
     const channel = supabase
       .channel("insights-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "goals", filter: `user_id=eq.${DEMO_USER_ID}` }, loadData)
-      .on("postgres_changes", { event: "*", schema: "public", table: "transactions", filter: `user_id=eq.${DEMO_USER_ID}` }, loadData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "goals", filter: `user_id=eq.${userId}` }, loadData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions", filter: `user_id=eq.${userId}` }, loadData)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [userId, isReady]);
 
   async function loadData() {
+    setLoading(true);
     const now = new Date();
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const [txRes, goalsRes, limRes, userRes] = await Promise.all([
-      supabase.from("transactions").select("*").eq("user_id", DEMO_USER_ID).gte("date", thirtyDaysAgo.toISOString().split("T")[0]).order("date", { ascending: true }),
-      supabase.from("goals").select("*").eq("user_id", DEMO_USER_ID),
-      supabase.from("category_limits").select("*").eq("user_id", DEMO_USER_ID),
-      supabase.from("users").select("income").eq("id", DEMO_USER_ID).single(),
+      supabase.from("transactions").select("*").eq("user_id", userId).gte("date", thirtyDaysAgo.toISOString().split("T")[0]).order("date", { ascending: true }),
+      supabase.from("goals").select("*").eq("user_id", userId),
+      supabase.from("category_limits").select("*").eq("user_id", userId),
+      supabase.from("users").select("income").eq("id", userId).single(),
     ]);
 
     setTransactions(txRes.data ?? []);
@@ -59,13 +63,13 @@ export default function InsightsPage() {
         </div>
         <TodayVsYesterday transactions={transactions} loading={loading} />
         <WeeklyTrend transactions={transactions} loading={loading} />
-        <CategoryIntelligence transactions={transactions} limits={limits} userId={DEMO_USER_ID} loading={loading} />
-        <GoalProgress goals={goals} userId={DEMO_USER_ID} loading={loading} />
+        <CategoryIntelligence transactions={transactions} limits={limits} userId={userId} loading={loading} />
+        <GoalProgress goals={goals} userId={userId} loading={loading} />
         <SavingsVelocity goals={goals} income={income} loading={loading} />
-        <PatternChips transactions={transactions} userId={DEMO_USER_ID} loading={loading} />
-        <WhatIfSimulator limits={limits} goals={goals} userId={DEMO_USER_ID} />
+        <PatternChips transactions={transactions} userId={userId} loading={loading} />
+        <WhatIfSimulator limits={limits} goals={goals} userId={userId} />
         <BurnRate transactions={transactions} limits={limits} income={income} loading={loading} />
-        <WeeklySummaryCard userId={DEMO_USER_ID} />
+        <WeeklySummaryCard userId={userId} />
       </div>
     </AppShell>
   );

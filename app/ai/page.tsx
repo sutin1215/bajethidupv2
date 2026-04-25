@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { DEMO_USER_ID } from "@/lib/constants";
+import { supabase } from "@/lib/supabase";
+import { usePersona } from "@/hooks/usePersona";
 import AppShell from "@/components/layout/AppShell";
 import ChatBubble from "@/components/ai/ChatBubble";
 import DecisionCard from "@/components/ai/DecisionCard";
 import GoalPreviewCard from "@/components/ai/GoalPreviewCard";
 import ContextBar from "@/components/ai/ContextBar";
 import { Loader2, Send } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 
 const SUGGESTED_PROMPTS = [
   "Can I afford something this month?",
@@ -42,6 +42,7 @@ interface Message {
 }
 
 export default function AiPage() {
+  const { userId, isMartin, isReady } = usePersona();
   const searchParams = useSearchParams();
   const context = searchParams.get("context");
   const goalName = searchParams.get("goal");
@@ -56,11 +57,13 @@ export default function AiPage() {
   const hasSentInitial = useRef(false);
 
   useEffect(() => {
+    if (!isReady) return;
+
     loadContextData();
 
     const welcome: Message = {
       role: "assistant",
-      content: "Hey! I'm your BajetHidup AI advisor. I know your finances inside out. Ask me anything — or tap a suggestion below to get started. 💚",
+      content: `Hey ${isMartin ? "Martin" : "Amirah"}! I'm your BajetHidup AI advisor. I know your finances inside out. Ask me anything — or tap a suggestion below to get started. 💚`,
       timestamp: new Date().toISOString(),
     };
 
@@ -92,7 +95,7 @@ export default function AiPage() {
         }, 400);
       }
     }
-  }, []);
+  }, [userId, isMartin, isReady]); // Reload context and chat when user switches
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -100,9 +103,9 @@ export default function AiPage() {
 
   async function loadContextData() {
     const [userRes, limRes, goalsRes] = await Promise.all([
-      supabase.from("users").select("income, language").eq("id", DEMO_USER_ID).single(),
-      supabase.from("category_limits").select("*").eq("user_id", DEMO_USER_ID),
-      supabase.from("goals").select("name, status").eq("user_id", DEMO_USER_ID),
+      supabase.from("users").select("income, language").eq("id", userId).single(),
+      supabase.from("category_limits").select("*").eq("user_id", userId),
+      supabase.from("goals").select("name, status").eq("user_id", userId),
     ]);
     setContextData({
       income: userRes.data?.income,
@@ -129,14 +132,14 @@ export default function AiPage() {
 
     try {
       const history = [...baseMessages, userMsg]
-        .filter(m => !(m.role === "assistant" && m.content.startsWith("Hey! I'm your BajetHidup")))
+        .filter(m => !(m.role === "assistant" && m.content.startsWith(`Hey ${isMartin ? "Martin" : "Amirah"}! I'm your BajetHidup`)))
         .slice(-10)
         .map(m => ({ role: m.role, content: m.content }));
 
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: DEMO_USER_ID, messages: history }),
+        body: JSON.stringify({ userId, messages: history }),
       });
 
       if (!res.ok) throw new Error(`API error ${res.status}`);
@@ -187,7 +190,7 @@ export default function AiPage() {
               {msg.decision_card && (
                 <DecisionCard
                   card={msg.decision_card}
-                  userId={DEMO_USER_ID}
+                  userId={userId}
                   onActionTaken={(desc) => {
                     setMessages(prev => [...prev, {
                       role: "assistant",
@@ -201,7 +204,7 @@ export default function AiPage() {
               {msg.goal_preview && (
                 <GoalPreviewCard
                   preview={msg.goal_preview}
-                  userId={DEMO_USER_ID}
+                  userId={userId}
                   onAdded={(name) => {
                     setMessages(prev => [...prev, {
                       role: "assistant",
@@ -268,7 +271,7 @@ export default function AiPage() {
             <button
               onClick={() => sendMessage()}
               disabled={!input.trim() || loading}
-              className="w-10 h-10 bg-green-600 rounded-xl flex items-center justify-center disabled:opacity-40 hover:bg-green-700 active:scale-95 transition-all flex-shrink-0"
+              className={`w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-40 active:scale-95 transition-all flex-shrink-0 ${isMartin ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
             >
               {loading
                 ? <Loader2 className="w-4 h-4 text-white animate-spin" />
